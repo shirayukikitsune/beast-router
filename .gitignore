@@ -1,0 +1,9 @@
+/cmake*
+/build*
+*.o
+*.obj
+
+/.idea
+/.vs
+/.vscodegit submodule add -b headers-only https://github.com/banditcpp/bandit bandit
+git submodule update --init --recursive
