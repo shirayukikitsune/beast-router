@@ -29,6 +29,11 @@ public:
         accept();
     }
 
+    void stop() {
+        acceptor.cancel();
+        acceptor.close();
+    }
+
 private:
 #include <boost/asio/yield.hpp>
     void accept(boost::beast::error_code ec = {}) {

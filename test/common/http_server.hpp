@@ -1,6 +1,6 @@
 #pragma once
 
-#include "library.h"
+#include "Router.hpp"
 #include "listener.hpp"
 
 #include <boost/beast.hpp>
@@ -30,6 +30,10 @@ public:
             this->getIoContext().run();
         });
         listener->run();
+    }
+
+    void stop() {
+        listener->stop();
     }
 
     void addRoute(boost::beast::http::verb verb, const std::string &path, Handler handler) {

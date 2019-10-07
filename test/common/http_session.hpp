@@ -30,10 +30,7 @@ private:
                 parser->body_limit(10'000);
                 stream.expires_after(std::chrono::seconds(10));
 
-                yield boost::beast::http::async_read(stream, buffer, parser->get(), [&](boost::beast::error_code ec,
-                                                                                  std::size_t bytes_transferred) {
-                    do_read(false, ec, bytes_transferred);
-                });
+                yield boost::beast::http::async_read(stream, buffer, parser->get(), boost::beast::bind_front_handler(&Session::do_read, this->shared_from_this(), false));
 
                 if (ec == boost::beast::http::error::end_of_stream) {
                     break;
@@ -47,13 +44,16 @@ private:
                 response = std::make_shared<boost::beast::http::response<boost::beast::http::string_body>>
                         (std::move(server->requestHandler(std::move(parser->release()))));
 
-                yield boost::beast::http::async_write(stream, *response, [&](boost::beast::error_code ec, std::size_t bytes_transferred) {
-                    if (ec) {
-                        return;
-                    }
+                yield boost::beast::http::async_write(stream, *response, boost::beast::bind_front_handler(&Session::do_read, this->shared_from_this(), response->need_eof()));
 
-                    do_read(response->need_eof(), ec, bytes_transferred);
-                });
+                if (ec) {
+                    std::cerr << "err: " << ec.message();
+                    return;
+                }
+
+                if (close) {
+                    break;
+                }
 
                 response.reset();
             }
