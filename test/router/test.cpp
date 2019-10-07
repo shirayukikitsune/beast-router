@@ -83,3 +83,42 @@ SCENARIO("A route should be matched", "[Router]") {
         httpServer->stop();
     }
 }
+
+TEST_CASE("Router benchmark", "[benchmark,Router]") {
+    BENCHMARK_ADVANCED("route handling")(Catch::Benchmark::Chronometer meter) {
+        auto address = boost::asio::ip::make_address("::1");
+        auto httpServer = std::make_shared<TestHttpServer<string_body>>();
+        boost::asio::io_context ioc;
+
+        httpServer->start(address, 48159);
+        httpServer->addRoute(boost::beast::http::verb::get, "/test", [](auto request) {
+            response<string_body> res{ status::ok, request.version() };
+            res.set(field::server, BOOST_BEAST_VERSION_STRING);
+            res.set(field::content_type, "text/plain");
+            res.keep_alive(request.keep_alive());
+            res.body() = "success";
+            res.prepare_payload();
+            return res;
+        });
+        httpServer->setNotFoundHandler([](auto && request) {
+            response<string_body> res{ status::not_found, request.version() };
+            res.set(field::server, BOOST_BEAST_VERSION_STRING);
+            res.set(field::content_type, "text/plain");
+            res.keep_alive(request.keep_alive());
+            res.body() = "not found";
+            res.prepare_payload();
+            return res;
+        });
+
+        meter.measure([&ioc] {
+            tcp::resolver resolver(ioc);
+            auto const results = resolver.resolve("localhost", "48159");
+            beast::tcp_stream stream(ioc);
+            stream.connect(results);
+
+            return makeRequest(stream, verb::get, "/test");
+        });
+
+        httpServer->stop();
+    };
+}

@@ -3,6 +3,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <type_traits>
 
 namespace kitsune::web {
 
@@ -14,9 +15,35 @@ namespace kitsune::web {
         explicit Token(std::basic_string<_Char> ch) : currentMatch(ch) {}
 
         Token(std::basic_string<_Char> ch, Handler handler)
-                : currentMatch(ch), handler(handler) {}
+                : currentMatch(ch), handler(std::move(handler)) {}
 
-        Handler *findMatch(std::basic_string<_Char> ref);
+        typename std::conditional<std::is_pointer<Handler>::value,
+                Handler,
+                typename std::add_pointer<Handler>::type>::type findMatch(std::basic_string<_Char> ref) {
+            try {
+                Token<Handler, _Char> *current = this;
+                do {
+                    auto other = ref.substr(0, current->currentMatch.length());
+                    if (other != current->currentMatch) {
+                        return nullptr;
+                    }
+                    if (other.length() == ref.length()) {
+                        return current->getHandler();
+                    }
+
+                    ref.erase(0, current->currentMatch.length());
+
+                    auto nextIt = nextTokens.find(ref[0]);
+                    if (nextIt == nextTokens.end()) {
+                        return nullptr;
+                    }
+                    current = &nextIt->second;
+                } while (!ref.empty());
+            } catch (const std::out_of_range &e) {
+                return nullptr;
+            }
+            return nullptr;
+        }
 
         void addSubToken(std::basic_string<_Char> ch, Handler handler);
 
@@ -24,42 +51,36 @@ namespace kitsune::web {
             return currentMatch;
         }
 
-        Handler *getHandler() {
+        template <class T = Handler>
+        typename std::enable_if<std::is_function<T>::value, T*>::type getHandler() {
+            return handler;
+        }
+
+        template <class T = Handler>
+        typename std::enable_if<!std::is_pointer<T>::value && !std::is_function<T>::value, T*>::type getHandler() {
+            return &handler;
+        }
+
+        template <class T = Handler>
+        typename std::enable_if<std::is_pointer<T>::value && !std::is_function<T>::value, T>::type getHandler() {
             return handler;
         }
 
     private:
         std::basic_string<_Char> currentMatch;
-        Handler *handler;
+        typename std::conditional<std::is_function<Handler>::value,
+            typename std::add_pointer<Handler>::type,
+            Handler>::type handler;
         std::map<_Char, Token<Handler, _Char>> nextTokens;
-    };
 
-    template<class Handler, typename _Char>
-    Handler *Token<Handler, _Char>::findMatch(std::basic_string<_Char> ref) {
-        try {
-            Token<Handler, _Char> *current = this;
-            do {
-                auto other = ref.substr(0, current->currentMatch.length());
-                if (other != current->currentMatch) {
-                    return nullptr;
-                }
-                if (other.length() == ref.length()) {
-                    return current->handler;
-                }
+        template <class T = Handler>
+        typename std::enable_if<!std::is_pointer<T>::value && !std::is_function<T>::value>::type clearHandler() {}
 
-                ref.erase(0, current->currentMatch.length());
-
-                auto nextIt = nextTokens.find(ref[0]);
-                if (nextIt == nextTokens.end()) {
-                    return nullptr;
-                }
-                current = &nextIt->second;
-            } while (!ref.empty());
-        } catch (const std::out_of_range &e) {
-            return nullptr;
+        template <class T = Handler>
+        typename std::enable_if<std::is_pointer<T>::value || std::is_function<T>::value>::type clearHandler() {
+            handler = nullptr;
         }
-        return nullptr;
-    }
+    };
 
     template<class Handler, typename _Char>
     void Token<Handler, _Char>::addSubToken(std::basic_string<_Char> ch, Handler h) {
@@ -95,7 +116,8 @@ namespace kitsune::web {
         // 3. Add the new token to the current token as a sub token
         // 4. Add the requested token to the new token as a sub token
 
-        Token newToken(currentMatch.substr(currentTokenMatch.length()), std::move(handler));
+        Token<Handler, _Char> newToken(currentMatch.substr(currentTokenMatch.length()), std::move(handler));
+        clearHandler();
         currentMatch = currentTokenMatch;
         nextTokens.insert_or_assign(newToken.currentMatch[0], std::move(newToken));
         nextTokens.insert_or_assign(substr[0], std::move(Token(substr, std::move(h))));
