@@ -1,6 +1,8 @@
 #include <catch2/catch.hpp>
 #include <Token.hpp>
 
+using kitsune::web::Token;
+
 SCENARIO("tokens can be created", "[Token]") {
     GIVEN("A Token for /test") {
         Token<std::string> token("/test", "success");
