@@ -11,7 +11,9 @@ SET(CMAKE_SHARED_LINKER_FLAGS_COVERAGE "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} --cov
 
 find_library(Boost 1.71.0 REQUIRED coroutine)
 
-option(EnableTest "Enable unit testing" ON)
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    option(EnableTest "Enable unit testing" ON)
+endif()
 
 add_subdirectory(src)
 
